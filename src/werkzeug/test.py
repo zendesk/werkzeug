@@ -25,6 +25,7 @@ from ._compat import string_types
 from ._compat import text_type
 from ._compat import to_bytes
 from ._compat import wsgi_encoding_dance
+from ._compat import wsgi_decoding_dance
 from ._internal import _get_environ
 from .datastructures import CallbackDict
 from .datastructures import CombinedMultiDict
@@ -437,15 +438,21 @@ class EnvironBuilder(object):
         """Turn an environ dict back into a builder. Any extra kwargs
         override the args extracted from the environ.
 
+        .. versionchanged:: 0.15.3.1
+            Path and query values are passed through the WSGI decoding
+            dance to avoid double encoding.
+
         .. versionadded:: 0.15
         """
         headers = Headers(EnvironHeaders(environ))
         out = {
-            "path": environ["PATH_INFO"],
+            "path": wsgi_decoding_dance(environ["PATH_INFO"]),
             "base_url": cls._make_base_url(
-                environ["wsgi.url_scheme"], headers.pop("Host"), environ["SCRIPT_NAME"]
+                environ["wsgi.url_scheme"],
+                headers.pop("Host"),
+                wsgi_decoding_dance(environ["SCRIPT_NAME"]),
             ),
-            "query_string": environ["QUERY_STRING"],
+            "query_string": wsgi_decoding_dance(environ["QUERY_STRING"]),
             "method": environ["REQUEST_METHOD"],
             "input_stream": environ["wsgi.input"],
             "content_type": headers.pop("Content-Type", None),
@@ -743,18 +750,17 @@ class EnvironBuilder(object):
         def _path_encode(x):
             return wsgi_encoding_dance(url_unquote(x, self.charset), self.charset)
 
-        qs = wsgi_encoding_dance(self.query_string)
-
+        raw_uri = wsgi_encoding_dance(self.request_uri, self.charset)
         result.update(
             {
                 "REQUEST_METHOD": self.method,
                 "SCRIPT_NAME": _path_encode(self.script_root),
                 "PATH_INFO": _path_encode(self.path),
-                "QUERY_STRING": qs,
+                "QUERY_STRING": wsgi_encoding_dance(self.query_string, self.charset),
                 # Non-standard, added by mod_wsgi, uWSGI
-                "REQUEST_URI": wsgi_encoding_dance(self.request_uri),
+                "REQUEST_URI": raw_uri,
                 # Non-standard, added by gunicorn
-                "RAW_URI": wsgi_encoding_dance(self.request_uri),
+                "RAW_URI": raw_uri,
                 "SERVER_NAME": self.server_name,
                 "SERVER_PORT": str(self.server_port),
                 "HTTP_HOST": self.host,

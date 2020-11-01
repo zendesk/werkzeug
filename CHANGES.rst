@@ -7,6 +7,8 @@ Released 2022-11-08
 
 -   The test client includes the query string in ``REQUEST_URI`` and
     ``RAW_URI``. :issue:`1781`
+-   ``EnvironBuilder.from_environ`` decodes values encoded for WSGI, to
+    avoid double encoding the new values. :pr:`1959`
 
 Version 0.15.3
 --------------
